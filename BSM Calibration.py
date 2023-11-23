@@ -13,7 +13,7 @@ debt = pd.read_excel(file, sheet_name="Gross Debt", nrows=1)
 
 """ Black-Scholes-Merton Model """
 
-def BSM(ticker, market_cap, debt, T=1, frequency=252, rf=0, epsilon=10e-3):
+def BSM(ticker, market_cap, debt, T=1, frequency=252, rf=0, epsilon=10e-5):
     company_debt = debt[[ticker]].iloc[0, 0]
     company_market_cap = market_cap[[ticker]].iloc[:, 0]
     current_time = 0
@@ -56,11 +56,23 @@ def BSM(ticker, market_cap, debt, T=1, frequency=252, rf=0, epsilon=10e-3):
     distance_to_default = d2(asset_values[-1], sigma_A, current_time)
     default_probability = (1 - norm.cdf(distance_to_default)) * 100
 
-    return distance_to_default, default_probability
+    distance_to_default_real =-d2(asset_values[-1], sigma_A, current_time)
+    default_probability_real = norm.cdf(distance_to_default) * 100 # notation approximation : non default probability
+    #print(distance_to_default_real)
+    #print(default_probability_real)
+
+    return sigma_A, distance_to_default, default_probability
 
 """ Test """
-
+cols = []
 for ticker in market_cap.columns:
     if ticker in debt.columns:
-        distance_to_default, default_probability = BSM(ticker, market_cap, debt)
-        print(f"{ticker} \nDistance to default {round(distance_to_default, 3)}, Default Probability {round(default_probability, 3)} \n")
+        cols.append(ticker)
+
+
+results = pd.DataFrame(index=["Sigma", "Distance to default", "Default Probability"], columns=cols)
+
+for ticker in cols:
+    results[ticker] = BSM(ticker, market_cap, debt)
+
+print(results["CRH LN Equity"])

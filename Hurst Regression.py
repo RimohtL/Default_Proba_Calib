@@ -2,7 +2,8 @@ import numpy as np
 from scipy import optimize
 import pandas as pd
 from scipy.stats import norm
-from scipy.optimize import curve_fit
+from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt
 
 
 """ Data Importation """
@@ -15,54 +16,109 @@ debt = pd.read_excel(file, sheet_name="Gross Debt", nrows=1)
 
 """ Black-Scholes-Merton Model """
 
+
 def d1(x, sigma_A, t, T, H, rf, company_debt):
-    return ( (np.log(x / company_debt)) + rf*(T-t) + 0.5 * sigma_A ** 2*(T**(2*H)-t**(2*H) )/ (
-    sigma_A*np.sqrt(T**(2*H)-t**(2*H))  ) )
+    return ((np.log(x / company_debt)) + rf * (T - t) + 0.5 * sigma_A ** 2 * (T ** (2 * H) - t ** (2 * H)) / (
+            sigma_A * np.sqrt(T ** (2 * H) - t ** (2 * H))))
 
-def d2(x, sigma_A, t, T, H,rf,company_debt):
-    return ((np.log(x / company_debt)) + rf*(T-t) - 0.5 * sigma_A ** 2*(T**(2*H)-t**(2*H) )/ (
-    sigma_A*np.sqrt(T**(2*H)-t**(2*H)) ))
 
-def d2_hurst(x, sigma_A, t, T, H,rf,company_debt):
-    return ((np.log(x / company_debt)) + rf*(T-t) - 0.5 * sigma_A ** 2*(T**(2*H)-t**(2*H) )/ (
-    sigma_A*np.sqrt((T-t)**(2*H)) ))
+def d2(x, sigma_A, t, T, H, rf, company_debt):
+    return ((np.log(x / company_debt)) + rf * (T - t) - 0.5 * sigma_A ** 2 * (T ** (2 * H) - t ** (2 * H)) / (
+            sigma_A * np.sqrt(T ** (2 * H) - t ** (2 * H))))
+
+
+def d2_hurst(x, sigma_A, t, T, H, rf, company_debt):
+    return ((np.log(x / company_debt)) + rf * (T - t) - 0.5 * sigma_A ** 2 * (T ** (2 * H) - t ** (2 * H)) / (
+            sigma_A * (T - t) ** H))
+
+def d1_hurst_updated(x, sigma_A, t, T ,H, rf, company_debt):
+    return ((np.log(x / company_debt)) + (rf + 0.5 * sigma_A ** 2) * (T ** (2 * H) - t ** (2 * H))) / (
+            sigma_A * (T - t)**H)
+
+def d2_hurst_updated(x, sigma_A, t, T, H, rf, company_debt):
+    return d1_hurst_updated(x, sigma_A, t, T, H, rf, company_debt) - sigma_A * (T - t)**H
+
+
 
 # inverse the black scholes formula
-def merton_formula(x, rf, t ,T, H,company_debt,equity_value,sigma_A):
-    d1_term = x * norm.cdf(d1(x, sigma_A, t,T, H, rf, company_debt))
-    d2_term = company_debt * np.exp(-rf * (T-t)) * norm.cdf(d2(x, sigma_A, t,T, H,rf, company_debt))
+def merton_formula(x, rf, t, T, H, company_debt, equity_value, sigma_A):
+    d1_term = x * norm.cdf(d1(x, sigma_A, t, T, H, rf, company_debt))
+    d2_term = company_debt * np.exp(-rf * (T - t)) * norm.cdf(d2(x, sigma_A, t, T, H, rf, company_debt))
     return d1_term - d2_term - equity_value
 
-def update_values(Var,frequency,sigma_A):
-    H=0.5*np.log(Var[0]/Var[1])/(np.log(frequency[1]/frequency[0]))
-    sigma_A_former=sigma_A
-    sigma_A=np.sqrt(Var[0])*(frequency[0]**H)
-    return(sigma_A,sigma_A_former,H)
+def update_values_regression_fixed_intercept(Var, delta_t, sigma_A, iteration, plot=True):
+    var_tau = np.array(Var)
 
-def var_relation(f,sigma,H):
-    return (np.exp(2* np.log(sigma/(np.exp(H*np.log(f))))))
+    # Transformation logarithmique
+    log_delta_t = np.log(delta_t)
+    log_var_tau = np.log(var_tau)
 
-def update_values2(Var, frequency, sigma_A, H):
-    float_frequency=[float(i) for i in frequency]
-    sigma_A_former=sigma_A
-    popt, pcov = curve_fit(var_relation, float_frequency, Var, p0=np.array([sigma_A,H]))
-    sigma_A,H= popt[0], popt[1]
+    fixed_intercept_log_sigma2 = np.log(var_tau[0]) # assuming delta = 1 otherwise H is here
 
-    ydata = np.array(Var)
-    y = np.array([var_relation(f, sigma_A, H) for f in frequency])
-    residuals = np.array(ydata - y)
-    ss_res = np.sum(residuals**2)
-    ss_tot = np.sum((ydata-np.mean(ydata))**2)
-    r_squared = 1 - (ss_res / ss_tot)
-    print('R_squared=', r_squared)
-    return(sigma_A, sigma_A_former, H)
+    # Régression linéaire
+    X = log_delta_t.reshape(-1, 1)
+    y = log_var_tau - fixed_intercept_log_sigma2
 
+    model = LinearRegression(fit_intercept=False)
+    model.fit(X, y)
+
+    # Coefficients de la régression
+    slope = model.coef_[0]
+
+    # Calcul de H
+    H = slope / 2
+    sigma_A_former = sigma_A
+    sigma_A = np.sqrt(var_tau[0]) * np.sqrt(int(252/delta_t[0]))
+
+    if plot:
+        plt.scatter(log_delta_t, y, label='Données')
+        plt.plot(log_delta_t, model.predict(log_delta_t.reshape(-1, 1)), color='red', label='Régression linéaire')
+        plt.xlabel('log(Delta t)')
+        plt.ylabel('log(Var(tau(Delta t)))')
+        plt.title(f"Régression de l'itération {iteration}")
+        plt.legend()
+        plt.show()
+
+    return sigma_A, sigma_A_former, H
+
+def update_values_regression(Var, delta_t, sigma_A, iteration, plot=True):
+    var_tau = np.array(Var)
+
+    # Transformation logarithmique
+    log_delta_t = np.log(delta_t)
+    log_var_tau = np.log(var_tau)
+
+    # Régression linéaire
+    X = log_delta_t.reshape(-1, 1)
+    y = log_var_tau
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    # Coefficients de la régression
+    intercept = model.intercept_
+    slope = model.coef_[0]
+
+    # Calcul de H
+    H = slope / 2
+    sigma_A_former = sigma_A
+    sigma_A = np.sqrt(np.exp(intercept))
+
+    if plot:
+        plt.scatter(log_delta_t, y, label='Données')
+        plt.plot(log_delta_t, model.predict(X), color='red', label='Régression linéaire')
+        plt.xlabel('log(Delta t)')
+        plt.ylabel('log(Var(tau(Delta t)))')
+        plt.title(f"Régression d l'itération {iteration}")
+        plt.legend()
+        plt.show()
+
+    return sigma_A, sigma_A_former, H
 
 def BSM_H(ticker, market_cap, debt, T=1, delta=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], rf=0, epsilon=10e-3, H0=0.5):
-
     frequency = []
     for d in delta:
-        frequency.append(252//d)
+        frequency.append(252 // d)
     company_debt = debt[[ticker]].iloc[0, 0]
     company_market_cap = market_cap[[ticker]].iloc[:, 0]
     sigma_A_former = 0
@@ -73,47 +129,45 @@ def BSM_H(ticker, market_cap, debt, T=1, delta=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 
     n_iter = 1
     while np.abs(sigma_A - sigma_A_former) > epsilon:
         print("Iteration ", n_iter)
-
         asset_values = {}
         for f in frequency:
             fasset_values = []
             n = company_market_cap.shape[0]
             days = []
             for i in range(n):
-                if i % (n//f) == 0:
+                if i % (n // f) == 0:
                     days.append(i)
             for day in days:
                 t = day / n
                 equity_value = company_market_cap[day]
                 # find zero of Merton function, ie asset_value at the current_time
-                fasset_values.append(optimize.newton(merton_formula, company_debt, args=(rf, t, 1+T, H, company_debt, equity_value, sigma_A), maxiter=100))
+                fasset_values.append(optimize.newton(merton_formula, company_debt,
+                                                     args=(rf, t, 1 + T, H, company_debt, equity_value, sigma_A),
+                                                     maxiter=100))
             asset_values[f] = fasset_values
-
 
         # update values
         Var = []
-        for f in frequency:
-            Var.append(np.var(np.diff(np.log(asset_values[f]), n=1)))
+        for i, f in enumerate(frequency):
+            Var.append(np.var(np.diff(np.log(asset_values[f]), n=1)) )# *f)
 
-        sigma_A, sigma_A_former, H = update_values2(delta, asset_values, sigma_A, H)
-        print(f"sigma= {sigma_A} %, H={H}")
         n_iter += 1
-
+        print("update values")
+        sigma_A, sigma_A_former, H = update_values_regression_fixed_intercept(Var, delta, sigma_A, n_iter, True)
+        print(f"sigma= {sigma_A}, H={H}")
     # compute distance to default and default probability
-    distance_to_default = - d2_hurst(company_market_cap.iloc[-1], sigma_A, 1, 1+T, H, rf, company_debt)
+    t = 1
+    distance_to_default = d2_hurst_updated(asset_values[frequency[0]][-1], sigma_A, t, t + T, H, rf, company_debt)
+    #distance_to_default = d2_hurst(asset_values[frequency[0]][-1], sigma_A, t, t + T, H, rf, company_debt)
     default_probability = (1 - norm.cdf(distance_to_default)) * 100
     return distance_to_default, default_probability
-
-
-# REMINDER : T = Debt Maturity => so if we want T = 1 then T = Trading period + 1
-# Trading period = 252 days here
 
 """
 cols = []
 for ticker in market_cap.columns:
     if ticker in debt.columns:
         cols.append(ticker)
-        
+
 results = pd.DataFrame(index=["Sigma", "Distance to default", "Default Probability"], columns=cols)
 
 for ticker in cols:

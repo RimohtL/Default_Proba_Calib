@@ -26,18 +26,12 @@ def d2(x, sigma_A, t, T, H, rf, company_debt):
     return ((np.log(x / company_debt)) + rf * (T - t) - 0.5 * sigma_A ** 2 * (T ** (2 * H) - t ** (2 * H)) / (
             sigma_A * np.sqrt(T ** (2 * H) - t ** (2 * H))))
 
-
-def d2_hurst(x, sigma_A, t, T, H, rf, company_debt):
-    return ((np.log(x / company_debt)) + rf * (T - t) - 0.5 * sigma_A ** 2 * (T ** (2 * H) - t ** (2 * H)) / (
-            sigma_A * (T - t) ** H))
-
-def d1_hurst_updated(x, sigma_A, t, T ,H, rf, company_debt):
-    return ((np.log(x / company_debt)) + (rf + 0.5 * sigma_A ** 2) * (T ** (2 * H) - t ** (2 * H))) / (
+def d1_hurst(x, sigma_A, t, T ,H, rf, company_debt):
+    return ((np.log(x / company_debt)) + rf * (T-t) + (0.5 * sigma_A ** 2) * (T ** (2 * H) - t ** (2 * H))) / (
             sigma_A * (T - t)**H)
 
-def d2_hurst_updated(x, sigma_A, t, T, H, rf, company_debt):
-    return d1_hurst_updated(x, sigma_A, t, T, H, rf, company_debt) - sigma_A * (T - t)**H
-
+def d2_hurst(x, sigma_A, t, T, H, rf, company_debt):
+    return d1_hurst(x, sigma_A, t, T, H, rf, company_debt) - sigma_A * (T - t)**H
 
 
 # inverse the black scholes formula
@@ -157,8 +151,7 @@ def BSM_H(ticker, market_cap, debt, T=1, delta=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 
         print(f"sigma= {sigma_A}, H={H}")
     # compute distance to default and default probability
     t = 1
-    distance_to_default = d2_hurst_updated(asset_values[frequency[0]][-1], sigma_A, t, t + T, H, rf, company_debt)
-    #distance_to_default = d2_hurst(asset_values[frequency[0]][-1], sigma_A, t, t + T, H, rf, company_debt)
+    distance_to_default = d2_hurst(asset_values[frequency[0]][-1], sigma_A, t, t + T, H, rf, company_debt)
     default_probability = (1 - norm.cdf(distance_to_default)) * 100
     return distance_to_default, default_probability
 
@@ -177,6 +170,6 @@ print(results["CRH LN Equity"])
 print(results)
 """
 
-ticker = market_cap.columns[1]
+ticker = market_cap.columns[0]
 distance_to_default, default_probability = BSM_H(ticker, market_cap, debt)
 print(f"{ticker} \nDistance to default {round(distance_to_default, 3)}, Default Probability {round(default_probability, 3)} \n")

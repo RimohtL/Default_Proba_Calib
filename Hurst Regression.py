@@ -145,13 +145,21 @@ def BSM_H(ticker, market_cap, debt, T=1, delta=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 
         for i, f in enumerate(frequency):
             Var.append(np.var(np.diff(np.log(asset_values[f]), n=1)) )# *f)
 
+        Mean = []
+        for i, f in enumerate(frequency):
+            Mean.append(np.mean(np.diff(np.log(asset_values[f]), n=1)))# *f)
+
         n_iter += 1
         print("update values")
         sigma_A, sigma_A_former, H = update_values_regression_fixed_intercept(Var, delta, sigma_A, n_iter, True)
         print(f"sigma= {sigma_A}, H={H}")
+
+    assert len(Mean) == len(delta)
+    mu = [round((Mean[k] + ((sigma_A**2)/(2*t)) * ((t+delta[k])**(2*H+1) - t**(2*H+1) - delta[k]**(2*H+1)) / (2*H+1)) / delta[k], 3) for k in range(len(delta))]
+    print(mu)
     # compute distance to default and default probability
     t = 1
-    distance_to_default = d2_hurst(asset_values[frequency[0]][-1], sigma_A, t, t + T, H, rf, company_debt)
+    distance_to_default = d2_hurst(asset_values[frequency[0]][-1], sigma_A, t, t + T, H, mu[-1], company_debt)
     default_probability = (1 - norm.cdf(distance_to_default)) * 100
     return distance_to_default, default_probability
 

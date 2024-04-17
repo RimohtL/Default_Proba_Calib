@@ -294,7 +294,7 @@ class Necula(CalibrationsModels):
         # Calcul de H
         H = slope / 2
         sigma_A_former = sigma_A
-        sigma_A = np.exp(intercept / 2) * n ** H
+        sigma_A = np.exp(intercept / 2) * 252 ** H
 
         if plot:
             plt.scatter(log_delta_t, y, label='Données')
@@ -347,7 +347,7 @@ class Necula(CalibrationsModels):
 
         sigma_A = []
         for i in range(len(step)):
-            sigma_A.append(np.sqrt(var_tau[i]) * ((n / step[i]) ** H))
+            sigma_A.append(np.sqrt(var_tau[i]) * ((252 / step[i]) ** H))
         s = np.mean(np.array(sigma_A))
 
         return s
@@ -400,7 +400,8 @@ class Necula(CalibrationsModels):
 
         assert len(Mean) == len(self.frequency)
         t = int(n/252)
-        mu = np.mean(np.diff(np.log(asset_values[self.frequency[0]]), n=1)) * self.frequency[0] + self.c_H(t, 1/self.frequency[0], H) * (sigma_A ** 2) / 2
+        mu = (1/t) * np.log(asset_values[self.frequency[0]][-1]/asset_values[self.frequency[0]][0]) + (sigma_A**2)/2 * (t**(2*H-1))
+        # mu = np.mean(np.diff(np.log(asset_values[self.frequency[0]]), n=1)) * self.frequency[0] + self.c_H(t, 1/self.frequency[0], H) * (sigma_A ** 2) / 2
         # mu = ((self.rf + (sigma_A ** 2)) / 2) * (self.c_H(t, 1 / self.frequency[0], H) - 1)
         distance_to_default = self.d2(asset_values[self.frequency[0]][-1], sigma_A, t, t + self.T, H, mu)
         default_probability = (1 - norm.cdf(distance_to_default)) * 100
@@ -548,7 +549,7 @@ class Rostek(CalibrationsModels):
         # Calcul de H
         H = slope / 2
         sigma_A_former = sigma_A
-        sigma_A = np.exp(intercept / 2) * n ** H
+        sigma_A = np.exp(intercept / 2) * 252 ** H
 
         if plot:
             plt.scatter(log_delta_t, y, label='Données')
@@ -630,7 +631,8 @@ class Rostek(CalibrationsModels):
         plt.show()
         assert len(Mean) == len(self.frequency)
         t = int(n/252)
-        mu = np.mean(np.diff(np.log(asset_values[self.frequency[0]]), n=1)) * self.frequency[0] + self.c_H(t, 1 /self.frequency[0], H) * (sigma_A ** 2) / 2
+        mu = (1/t) * np.log(asset_values[self.frequency[0]][-1]/asset_values[self.frequency[0]][0]) + (sigma_A**2)/2 * (t**(2*H-1))
+        # mu = np.mean(np.diff(np.log(asset_values[self.frequency[0]]), n=1)) * self.frequency[0] + self.c_H(t, 1 /self.frequency[0], H) * (sigma_A ** 2) / 2
         # mu = ((self.rf + (sigma_A ** 2)) / 2) * (self.c_H(t, 1 / self.frequency[0], H) - 1)
         distance_to_default = self.d2(asset_values[self.frequency[0]][-1], sigma_A, t, t + self.T, H, mu)
         default_probability = (1 - norm.cdf(distance_to_default)) * 100

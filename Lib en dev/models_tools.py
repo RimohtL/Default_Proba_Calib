@@ -212,4 +212,32 @@ class Tools:
                     export += " & " + str(value) + unit
             export += ' \\\ '
             print(export)
+            
+    def export_latex_one_maturity(self, liste_ticker, ratings=None, maturity=5):
+        models = (Merton, Necula, Rostek)
+        index_proba = [2, 1, 1]
+        index_sigma = [0, 3, 3]
+        index_mu = [3, 5, 5]
+        index_H = [2, 2, 2]
+        for j, ticker_ in enumerate(liste_ticker):
+            if ticker_ == "CGG FP Equity":
+                break
+            export = str(ticker_)[:-7]
+            if ratings is not None:
+                export += " & " + ratings[j]
+            for i, model in enumerate(models):
+                if i!=0:
+                    result = model(ticker_, self.market_cap, self.debt, T=maturity).calibrate()
+                    export += " & " + str(np.round(result[index_proba[i]],2)) + "\%"
+                    export += " & " + str(np.round(result[index_sigma[i]],2))
+                    export += " & " + str(np.round(result[index_mu[i]],2))
+                    export += " & " + str(np.round(result[index_H[i]],2))
+                else:
+                    result = model(ticker_, self.market_cap, self.debt, T=maturity).calibrate()
+                    export += " & " + str(np.round(result[index_proba[i]],2)) + "\%"
+                    export += " & " + str(np.round(result[index_sigma[i]],2))
+                    export += " & " + str(np.round(result[index_mu[i]],2))
+                    export += " & " + str(0.5)
+            export += ' \\\ '
+            print(export)
 
